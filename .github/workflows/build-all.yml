@@ -1,7 +1,9 @@
-name: Build Windows Installer
+name: Validate Windows Build
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -24,16 +26,21 @@ jobs:
       - name: Build native host test artifact
         run: npm run native-host:build
       - run: npm test
-      - run: npm run dist:win
+      - name: Build Windows installer
+        if: github.event_name != 'pull_request'
+        run: npm run dist:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate checksums and dependency metadata
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           Get-ChildItem dist -Filter *.exe | ForEach-Object { "$(($_ | Get-FileHash -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist/SHA256SUMS.txt
           npm sbom --sbom-format cyclonedx | Set-Content dist/soterios-node.cdx.json
           cargo metadata --locked --format-version 1 --manifest-path native/process-inspector/Cargo.toml | Set-Content dist/soterios-rust-metadata.json
-      - uses: actions/upload-artifact@v4
+      - name: Upload Windows installer
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: |
